@@ -24,14 +24,11 @@ COPY --from=frontend /webapp/pack webapp/pack
 # RUN apt-get update && apt-get install libgtk-3-dev libwebkit2gtk-4.0-dev -y
 RUN make server-linux
 RUN make server-linux-package-docker
-
-# just hold the packages to output later
-FROM alpine:3.12 AS dist
-
-WORKDIR /dist
-
-COPY --from=backend /go/dist/focalboard-server-linux-amd64.tar.gz .
-ENTRYPOINT ["/dist/focalboard/main"]
+# Modify Dockerfile to include the missing extraction step
+# This is the correct sequence of commands.
+# 1. Copy the archive
+# 2. Extract the archive
+# 3. Point the entrypoint to the extracted executable
 # ... (bagian sebelumnya)
 
 # just hold the packages to output later
