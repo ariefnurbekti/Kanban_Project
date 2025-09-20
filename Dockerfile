@@ -1,54 +1,53 @@
-# This dockerfile is used to build Focalboard for Linux
-# it builds all the parts inside the container and the last stage just holds the
-# package that can be extracted using docker cp command
-# ie
-# docker build -f Dockerfile.build --no-cache -t focalboard-build:dirty .
-# docker run --rm -v /tmp/dist:/tmp -d --name test focalboard-build:dirty /bin/sh -c 'sleep 1000'
-# docker cp test:/dist/focalboard-server-linux-amd64.tar.gz .
-
-# build frontend
+# STAGE 1: Build Frontend Assets
+# Menggunakan Node.js untuk mengkompilasi aplikasi web (HTML, CSS, JS).
 FROM node:16.3.0 AS frontend
 
 WORKDIR /webapp
 COPY webapp .
 
+# Install dependencies dan build frontend assets
 RUN npm install --no-optional
 RUN npm run pack
 
-# build backend and package
+
+# STAGE 2: Build Backend Binary dan Package
+# Menggunakan Go untuk mengkompilasi server dan menggabungkannya dengan aset frontend ke dalam satu arsip.
 FROM golang:1.16.5 AS backend
 
-COPY . .
-COPY --from=frontend /webapp/pack webapp/pack
-
-# RUN apt-get update && apt-get install libgtk-3-dev libwebkit2gtk-4.0-dev -y
-# STAGE 3: Merakit file aplikasi final
-FROM alpine:3.12 AS builder
-
+# Menggunakan /app sebagai direktori kerja yang bersih
 WORKDIR /app
 
-# Salin arsip server dari tahap backend
-COPY --from=backend /go/dist/focalboard-server-linux-amd64.tar.gz .
+# Salin semua kode sumber proyek
+COPY . .
 
-# Ekstrak arsip. Ini akan membuat direktori 'focalboard'.
-RUN tar -xvzf focalboard-server-linux-amd64.tar.gz
+# Salin aset frontend yang sudah jadi dari tahap sebelumnya
+COPY --from=frontend /webapp/pack ./webapp/pack
 
-# Salin aset frontend ke lokasi yang benar di dalam file server yang sudah diekstrak
-COPY --from=frontend /webapp/pack ./focalboard/webapp/pack
+# Jalankan perintah 'make' yang membuat binary Go dan mengemasnya menjadi arsip .tar.gz.
+# Perintah ini akan menghasilkan file di: /app/dist/focalboard-server-linux-amd64.tar.gz
+RUN make server-linux-package-docker
 
-# STAGE 4: Membuat image final yang bersih dan dapat dijalankan
-FROM alpine:3.12
 
-# Install ca-certificates, dibutuhkan untuk koneksi keluar yang aman
+# STAGE 3: Membuat Image Final yang Dapat Dijalankan
+# Ini adalah image akhir yang kecil dan bersih yang akan benar-benar di-deploy.
+FROM alpine:3.15
+
+# Install sertifikat yang diperlukan untuk koneksi HTTPS
 RUN apk --no-cache add ca-certificates
 
+# Atur direktori kerja untuk aplikasi
 WORKDIR /opt/focalboard
 
-# Salin seluruh aplikasi yang sudah jadi dari tahap 'builder'
-COPY --from=builder /app/focalboard .
+# Salin arsip final dari tahap 'backend'
+COPY --from=backend /app/dist/focalboard-server-linux-amd64.tar.gz .
 
-# Port yang akan digunakan aplikasi. Railway akan menggunakan variabel FOCALBOARD_PORT.
+# Ekstrak arsip. Ini akan membuat direktori 'focalboard-server-linux-amd64'.
+RUN tar -xvzf focalboard-server-linux-amd64.tar.gz
+
+# Informasikan port mana yang akan digunakan aplikasi.
+# Di Railway, ini akan ditimpa oleh variabel FOCALBOARD_PORT.
 EXPOSE 8000
 
-# Perintah untuk menjalankan server
-ENTRYPOINT ["./main"]
+# Atur perintah yang akan dijalankan saat container dimulai.
+# Ini menunjuk ke file program 'main' di dalam direktori yang telah diekstrak.
+ENTRYPOINT ["./focalboard-server-linux-amd64/main"]
