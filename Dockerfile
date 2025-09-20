@@ -32,3 +32,14 @@ WORKDIR /dist
 
 COPY --from=backend /go/dist/focalboard-server-linux-amd64.tar.gz .
 ENTRYPOINT ["/dist/focalboard/main"]
+# ... (bagian sebelumnya)
+
+# just hold the packages to output later
+FROM alpine:3.12 AS dist
+
+WORKDIR /dist
+
+COPY --from=backend /go/dist/focalboard-server-linux-amd64.tar.gz .
+RUN tar -xvzf focalboard-server-linux-amd64.tar.gz
+
+ENTRYPOINT ["/dist/focalboard/main"]
