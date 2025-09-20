@@ -31,3 +31,4 @@ FROM alpine:3.12 AS dist
 WORKDIR /dist
 
 COPY --from=backend /go/dist/focalboard-server-linux-amd64.tar.gz .
+ENTRYPOINT ["/dist/focalboard/main"]
