@@ -22,21 +22,33 @@ COPY . .
 COPY --from=frontend /webapp/pack webapp/pack
 
 # RUN apt-get update && apt-get install libgtk-3-dev libwebkit2gtk-4.0-dev -y
-RUN make server-linux
-RUN make server-linux-package-docker
-# Modify Dockerfile to include the missing extraction step
-# This is the correct sequence of commands.
-# 1. Copy the archive
-# 2. Extract the archive
-# 3. Point the entrypoint to the extracted executable
-# ... (bagian sebelumnya)
+# STAGE 3: Merakit file aplikasi final
+FROM alpine:3.12 AS builder
 
-# just hold the packages to output later
-FROM alpine:3.12 AS dist
+WORKDIR /app
 
-WORKDIR /dist
-
+# Salin arsip server dari tahap backend
 COPY --from=backend /go/dist/focalboard-server-linux-amd64.tar.gz .
+
+# Ekstrak arsip. Ini akan membuat direktori 'focalboard'.
 RUN tar -xvzf focalboard-server-linux-amd64.tar.gz
 
-ENTRYPOINT ["/dist/focalboard/main"]
+# Salin aset frontend ke lokasi yang benar di dalam file server yang sudah diekstrak
+COPY --from=frontend /webapp/pack ./focalboard/webapp/pack
+
+# STAGE 4: Membuat image final yang bersih dan dapat dijalankan
+FROM alpine:3.12
+
+# Install ca-certificates, dibutuhkan untuk koneksi keluar yang aman
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /opt/focalboard
+
+# Salin seluruh aplikasi yang sudah jadi dari tahap 'builder'
+COPY --from=builder /app/focalboard .
+
+# Port yang akan digunakan aplikasi. Railway akan menggunakan variabel FOCALBOARD_PORT.
+EXPOSE 8000
+
+# Perintah untuk menjalankan server
+ENTRYPOINT ["./main"]
